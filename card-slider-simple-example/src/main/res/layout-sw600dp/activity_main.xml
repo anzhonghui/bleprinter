@@ -833,6 +833,7 @@
                     android:layout_weight="3"
                     android:layout_width="0dp"
                     android:background="#1591e9"
+                    android:padding="2dp"
                     android:layout_height="match_parent">
 
                     <TextView
@@ -844,6 +845,7 @@
                         android:textColor="#eb2b0d"
                         android:background="#ffffff"
                         android:textSize="23dp"/>
+
                 </LinearLayout>
 
             </LinearLayout>
@@ -955,7 +957,7 @@
                 android:layout_width="fill_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
-                android:text="启动反向阀"
+                android:text="启动方向阀"
                 android:textColor="#1591e9"
                 android:gravity="center"
                 app:qmui_backgroundColor="#ffffff"

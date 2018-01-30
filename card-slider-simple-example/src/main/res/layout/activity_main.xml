@@ -814,6 +814,7 @@
                 <!--故障提示部分-->
                 <LinearLayout
                     android:layout_marginLeft="8dp"
+                    android:padding="1dp"
                     android:layout_weight="3"
                     android:layout_width="0dp"
                     android:background="#1591e9"
@@ -939,7 +940,7 @@
                 android:layout_width="fill_parent"
                 android:layout_height="0dp"
                 android:layout_weight="1"
-                android:text="启动反向阀"
+                android:text="启动方向阀"
                 android:textColor="#1591e9"
                 android:gravity="center"
                 app:qmui_backgroundColor="#ffffff"

@@ -78,6 +78,7 @@ public class BlueToothHelper  {
                     data[i] = qppData[i] & 0xFF;
                 }
 
+                System.out.println(ProtocolUtil.ints2HexString(data));
                 //进行异或校验
                 if(!ProtocolUtil.checkReceiveData(data)){
                     Log.e(TAG, "异或校验失败：" + ProtocolUtil.ints2HexString(data));

@@ -64,6 +64,8 @@ public class MenuActivity extends AppCompatActivity {
     private long countryAnimDuration;
     private int currentPosition;
 
+    private boolean isClick = false;
+
     //蓝牙管理类
     private BluetoothManager bluetoothManager = null;
 
@@ -271,7 +273,10 @@ public class MenuActivity extends AppCompatActivity {
                 if (BlueToothHelper.mConnected) {
                     //调用定时任务方法,启用定时任务前，初始化心跳接收状态
                     FarmConstant.HAND_ANSWER_STATE = 0;
-                    startHandTimer(countries[clickedPosition], type[clickedPosition]);
+                    if(!isClick){
+                        isClick = true;
+                        startHandTimer(countries[clickedPosition], type[clickedPosition]);
+                    }
 
                 } else {
                     Toast.makeText(MenuActivity.this, "请先连接蓝牙设备", Toast.LENGTH_SHORT).show();
@@ -308,8 +313,10 @@ public class MenuActivity extends AppCompatActivity {
 
     };
 
+    private boolean exit = false;
     @Override
     protected void onDestroy() {
+        exit = true;
         LocalBroadcastManager.getInstance(this).unregisterReceiver(mBroadcastReceiver);
         super.onDestroy();
     }
@@ -324,12 +331,18 @@ public class MenuActivity extends AppCompatActivity {
             @Override
             public void run() {
                 //发送三次, 如果三次内没有反馈，取消；
+                if (exit){
+                    System.out.println("用户退出");
+                    timer1.cancel();
+                    return;
+                }
                 if (count == 3 && FarmConstant.HAND_ANSWER_STATE == 0) {
                     //showToast("抱歉，设备长时间没有应答");
                     Message msg = new Message();
                     msg.obj = "抱歉，设备长时间没有应答";
                     handler.sendMessage(msg);
                     timer1.cancel();
+                    isClick = false;
 
                 } else if (FarmConstant.HAND_ANSWER_STATE == 2) { //收到握手错误应答
                     //showToast("抱歉，设备应答失败");
@@ -337,6 +350,8 @@ public class MenuActivity extends AppCompatActivity {
                     msg.obj = "抱歉，设备应答失败";
                     handler.sendMessage(msg);
                     timer1.cancel();
+                    isClick = false;
+                    return;
 
                 } else if (FarmConstant.HAND_ANSWER_STATE == 1) { //收到握手正确应答
                     timer1.cancel();
@@ -345,6 +360,8 @@ public class MenuActivity extends AppCompatActivity {
                     intent.putExtra("设备型号", deviceName);
                     intent.putExtra("TYPE", type);
                     startActivity(intent);
+                    isClick = false;
+                    return;
                 }
 
 

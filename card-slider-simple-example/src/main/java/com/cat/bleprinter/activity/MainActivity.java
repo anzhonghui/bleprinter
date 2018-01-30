@@ -38,19 +38,17 @@ import com.cat.bleprinter.exception.BleNoConnectedException;
 import com.cat.bleprinter.helper.BlueToothHelper;
 import com.cat.bleprinter.util.Arith;
 import com.cat.bleprinter.util.ProtocolUtil;
+import com.cat.bleprinter.util.SendMsgUtil;
 import com.qmuiteam.qmui.widget.roundwidget.QMUIRoundButton;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
-
-import static com.cat.bleprinter.constant.FarmConstant.CMD_HANDSHAKE;
-import static com.cat.bleprinter.constant.FarmConstant.CMD_VERSION;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = MainActivity.class.getSimpleName();
@@ -93,6 +91,62 @@ public class MainActivity extends AppCompatActivity {
     private BluetoothManager bluetoothManager = null;
     private CountDownTimer timer;
 
+    //全局的map对象，用于保存指令的发送状态
+    private Map<String, SendMsgUtil> maps = new HashMap<>();
+    public void initMap(){
+        //初始化待机指令发送
+        byte[] waitData = ProtocolUtil.packData(FarmConstant.CMD_WAIT, new byte[]{});
+        maps.put("wait",new SendMsgUtil("待机", waitData, false, 0));
+
+        //初始化建压指令
+        byte[] startData = ProtocolUtil.packData(FarmConstant.CMD_START, new byte[]{});
+        maps.put("start",new SendMsgUtil("建压", startData, false, 0));
+
+        //初始化开始加热指令
+        byte[] jiareStartData = ProtocolUtil.packData(FarmConstant.CMD_JIARE, new byte[]{FarmConstant.SUCCESS});
+        maps.put("jiareStart",new SendMsgUtil("开始加热", jiareStartData, false, 0));
+
+        //初始化停止加热指令
+        byte[] jiareStopData = ProtocolUtil.packData(FarmConstant.CMD_JIARE, new byte[]{FarmConstant.FAILED});
+        maps.put("jiareStop",new SendMsgUtil("停止加热加热", jiareStopData, false, 0));
+
+        //初始化启动喷射指令
+        byte[] pensheStartData = ProtocolUtil.packData(FarmConstant.CMD_PENSHE, new byte[]{FarmConstant.SUCCESS});
+        maps.put("pensheStart",new SendMsgUtil("启动喷射", pensheStartData, false, 0));
+
+        //初始化停止喷射指令
+        byte[] pensheStopData = ProtocolUtil.packData(FarmConstant.CMD_PENSHE, new byte[]{FarmConstant.FAILED});
+        maps.put("pensheStop",new SendMsgUtil("停止喷射", pensheStopData, false, 0));
+
+        //初始化开始排空指令
+        byte[] paikongStartData = ProtocolUtil.packData(FarmConstant.CMD_PAIKONG, new byte[]{FarmConstant.SUCCESS});
+        maps.put("paikongStart",new SendMsgUtil("开始排空", paikongStartData, false, 0));
+
+        //初始化停止排空指令
+        byte[] paikongStopData = ProtocolUtil.packData(FarmConstant.CMD_PAIKONG, new byte[]{FarmConstant.FAILED});
+        maps.put("paikongStop",new SendMsgUtil("停止排空", paikongStopData, false, 0));
+
+        //初始化启动方向阀指令
+        byte[] fangxiangStartData = ProtocolUtil.packData(FarmConstant.CMD_FANFIANG, new byte[]{FarmConstant.SUCCESS});
+        maps.put("fangxiangStart",new SendMsgUtil("启动方向阀", fangxiangStartData, false, 0));
+
+        //初始化停止方向阀指令
+        byte[] fangxiangStopData = ProtocolUtil.packData(FarmConstant.CMD_FANFIANG, new byte[]{FarmConstant.FAILED});
+        maps.put("fangxiangStop",new SendMsgUtil("停止方向阀", fangxiangStopData, false, 0));
+
+        //初始化启动回流泵指令
+        byte[] huiliuStartData = ProtocolUtil.packData(FarmConstant.CMD_HUILIU, new byte[]{FarmConstant.SUCCESS});
+        maps.put("huiliuStart",new SendMsgUtil("启动回流泵", huiliuStartData, false, 0));
+
+        //初始化停止回流泵指令
+        byte[] huiliuStopData = ProtocolUtil.packData(FarmConstant.CMD_HUILIU, new byte[]{FarmConstant.FAILED});
+        maps.put("huiliuStop",new SendMsgUtil("停止回流泵", huiliuStopData, false, 0));
+
+        //初始化获取版本号指令
+        byte[] getVersionData = ProtocolUtil.packData(FarmConstant.CMD_VERSION, new byte[]{});
+        maps.put("version",new SendMsgUtil("获取版本号", getVersionData, false, 0));
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -111,7 +165,8 @@ public class MainActivity extends AppCompatActivity {
         initView();
         initHandler();
         initLinster();
-        initButton(false, true);
+        initButton(false);
+        initMap();
 
         //获取启动界面的Intent
         Intent intent = getIntent();
@@ -211,99 +266,225 @@ public class MainActivity extends AppCompatActivity {
 //                    }
 //                }
 
-                //开始建压
-                if (result[0] == FarmConstant.CMD_START){
+                //待机命令通用应答,待机广播
+                if (result[0] == FarmConstant.CMD_WAIT){
+                    SendMsgUtil sendMsgUtil = maps.get("wait");
                     if (result[1] == 0x00){
+                        sendMsgUtil.setAnswerState(1);
+//                        Toast.makeText(MainActivity.this,"命令发送成功",Toast.LENGTH_SHORT).show();
+                        Log.i("TGA", "待机命令发送成功");
+                        initButton(false);
+                    }else{
+                        sendMsgUtil.setAnswerState(2);
+                        showToast("待机命令发送失败");
+                    }
+                }
+
+                //开始建压广播
+                if (result[0] == FarmConstant.CMD_START){
+                    SendMsgUtil sendMsgUtil = maps.get("start");
+                    if (result[1] == 0x00){
+                        //如果应答成功，初始化按钮点击状态和应答状态
+                        sendMsgUtil.setAnswerState(1);
 //                        showToast("建压命令发送成功...");
                         Log.i("TGA", "建压命令发送成功");
                     }else if(result[1] == 0x01){
+                        //如果应答失败，初始化按钮点击状态和应答状态
+                        sendMsgUtil.setAnswerState(2);
                         showToast("建压命令发送失败");
                     }
                 }
-                //喷射控制
-                if (result[0] == FarmConstant.CMD_PENSHE){
-                    if (result[1] == 0x00){
-                        if (btn_main_penshe.getText().toString().equals("启动喷射")){
-                            btn_main_penshe.setText("停止喷射");
-//                            showToast("喷射命令发送成功");
-                            Log.i("TGA", "喷射命令发送成功");
-                        }else if (btn_main_penshe.getText().toString().equals("停止喷射")){
-                            btn_main_penshe.setText("启动喷射");
-//                            showToast("停止喷射命令发送成功");
-                            Log.i("TGA", "停止喷射命令发送成功");
+
+                //加热广播控制
+                if (result[0] == FarmConstant.CMD_JIARE){
+                    String str = btn_main_jiare.getText().toString();
+                    if ("开始加热".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("jiareStart");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
+                            btn_main_jiare.setText("停止加热");
+                            Log.i("TGA", "开始加热命令发送成功");
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+//                            btn_main_jiare.setText("开始加热");
+                            Log.i("TGA", "开始加热命令发送失败");
+                            showToast("开始加热命令发送失败");
                         }
-                    }else if (result[1] == 0x01){
-                        showToast("喷射命令发送失败");
+                    } else if ("停止加热".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("jiareStop");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
+                            btn_main_jiare.setText("开始加热");
+                            Log.i("TGA", "停止加热命令发送成功");
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+//                            btn_main_jiare.setText("停止加热");
+                            Log.i("TGA", "停止加热命令发送失败");
+                            showToast("停止加热命令发送失败");
+                        }
                     }
+                }
+
+                //喷射广播控制
+                if (result[0] == FarmConstant.CMD_PENSHE){
+                    String str = btn_main_penshe.getText().toString();
+                    if ("启动喷射".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("pensheStart");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
+                            btn_main_penshe.setText("停止喷射");
+                            Log.i("TGA", "启动喷射命令发送成功");
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+                            Log.i("TGA", "启动喷射命令发送失败");
+                            showToast("启动喷射命令发送失败");
+                        }
+                    } else if ("停止喷射".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("pensheStop");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
+                            btn_main_penshe.setText("启动喷射");
+                            Log.i("TGA", "停止喷射命令发送成功");
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+                            Log.i("TGA", "停止喷射命令发送失败");
+                            showToast("停止喷射命令发送失败");
+                        }
+                    }
+//                    if (result[1] == 0x00){
+//                        if (btn_main_penshe.getText().toString().equals("启动喷射")){
+//                            btn_main_penshe.setText("停止喷射");
+////                            showToast("喷射命令发送成功");
+//                            Log.i("TGA", "喷射命令发送成功");
+//                        }else if (btn_main_penshe.getText().toString().equals("停止喷射")){
+//                            btn_main_penshe.setText("启动喷射");
+////                            showToast("停止喷射命令发送成功");
+//                            Log.i("TGA", "停止喷射命令发送成功");
+//                        }
+//                    }else if (result[1] == 0x01){
+//                        showToast("喷射命令发送失败");
+//                    }
                 }
                 //排空命令通用应答
                 if (result[0] == FarmConstant.CMD_PAIKONG){
-                    if (result[1] == 0x00){
-//                        showToast("命令发送成功");
-                        Log.i("TGA", "排空命令发送成功");
-                        setMtimer();
-                    }else{
-                        showDialogFirst("命令发送失败");
-                    }
-                }
-                //加热控制
-                if (result[0] == FarmConstant.CMD_JIARE){
-                    if (result[1] == 0x00) {
-                        if (btn_main_jiare.getText().toString().equals("开始加热")) {
-                            btn_main_jiare.setText("停止加热");
-//                            showToast("加热命令发送成功");
-                            Log.i("TGA", "加热命令发送成功");
-                        } else if (btn_main_jiare.getText().toString().equals("停止加热")) {
-                            btn_main_jiare.setText("开始加热");
-//                            showToast("停止加热命令发送成功");
-                            Log.i("TGA", "停止加热命令发送成功");
+                    String str = btn_main_paikong.getText().toString();
+                    if ("开始排空".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("paikongStart");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
+                            btn_main_paikong.setText("停止排空");
+                            Log.i("TGA", "开始排空命令发送成功");
+                            setMtimer();
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+                            Log.i("TGA", "开始排空命令发送失败");
+                            showToast("开始排空命令发送失败");
                         }
-                    }else if (result[1] == 0x01){
-                        showDialogFirst("加热命令发送失败");
+                    } else if ("停止排空".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("paikongStop");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
+                            btn_main_paikong.setText("开始排空");
+                            Log.i("TGA", "停止排空命令发送成功");
+                            txt_main_time.setVisibility(View.INVISIBLE);
+                            mtimer.setVisibility(View.INVISIBLE);
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+                            Log.i("TGA", "停止排空命令发送失败");
+                            showToast("停止排空命令发送失败");
+                        }
                     }
+//                    if (result[1] == 0x00){
+////                        showToast("命令发送成功"); paikongStart
+//                        Log.i("TGA", "排空命令发送成功");
+//                        btn_main_paikong.setText("停止排空");
+//                        setMtimer();
+//                    }else{
+//                        showDialogFirst("命令发送失败");
+//                    }
                 }
-                //反向阀
+
+                //反向阀广播
                 if (result[0] == FarmConstant.CMD_FANFIANG){
-                    if (result[1] == 0x00) {
-                        if (btn_main_fanxiang.getText().toString().equals("启动反向阀")) {
-                            btn_main_fanxiang.setText("停止反向阀");
-//                            showToast("启动反向阀命令发送成功");
-                            Log.i("TGA", "启动反向阀命令发送成功");
-                        } else if (btn_main_fanxiang.getText().toString().equals("停止反向阀")) {
-                            btn_main_fanxiang.setText("启动反向阀");
-                            Log.i("TGA", "停止反向阀命令发送成功");
-//                            showToast("停止反向阀命令发送成功");
+                    String str = btn_main_fanxiang.getText().toString();
+                    if ("启动方向阀".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("fangxiangStart");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
+                            btn_main_fanxiang.setText("停止方向阀");
+                            Log.i("TGA", "启动方向阀命令发送成功");
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+                            Log.i("TGA", "启动方向阀命令发送失败");
+                            showToast("启动方向阀命令发送失败");
                         }
-                    }else if (result[1] == 0x01){
-                        showDialogFirst("命令发送失败");
+                    } else if ("停止方向阀".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("fangxiangStop");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
+                            btn_main_fanxiang.setText("启动方向阀");
+                            Log.i("TGA", "停止方向阀命令发送成功");
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+                            Log.i("TGA", "停止方向阀命令发送失败");
+                            showToast("停止方向阀命令发送失败");
+                        }
                     }
+//                    if (result[1] == 0x00) {
+//                        if (btn_main_fanxiang.getText().toString().equals("启动反向阀")) {
+//                            btn_main_fanxiang.setText("停止反向阀");
+////                            showToast("启动反向阀命令发送成功");
+//                            Log.i("TGA", "启动反向阀命令发送成功");
+//                        } else if (btn_main_fanxiang.getText().toString().equals("停止反向阀")) {
+//                            btn_main_fanxiang.setText("启动反向阀");
+//                            Log.i("TGA", "停止反向阀命令发送成功");
+////                            showToast("停止反向阀命令发送成功");
+//                        }
+//                    }else if (result[1] == 0x01){
+//                        showDialogFirst("命令发送失败");
+//                    }
                 }
-                //回流泵
+                //回流泵广播
                 if (result[0] == FarmConstant.CMD_HUILIU){
-                    if (result[1] == 0x00) {
-                        if (btn_main_huiliu.getText().toString().equals("启动回流泵")) {
+                    String str = btn_main_huiliu.getText().toString();
+                    if ("启动回流泵".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("huiliuStart");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
                             btn_main_huiliu.setText("停止回流泵");
-//                            showToast("启动回流泵命令发送成功");
                             Log.i("TGA", "启动回流泵命令发送成功");
-                        } else if (btn_main_huiliu.getText().toString().equals("停止回流泵")) {
-                            btn_main_huiliu.setText("启动回流泵");
-//                            showToast("停止回流泵命令发送成功");
-                            Log.i("TGA", "停止回流泵命令发送成功");
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+                            Log.i("TGA", "启动回流泵命令发送失败");
+                            showToast("启动回流泵令发送失败");
                         }
-                    }else if (result[1] == 0x01){
-                        showDialogFirst("命令发送失败");
+                    } else if ("停止回流泵".equals(str)) {
+                        SendMsgUtil sendMsgUtil = maps.get("huiliuStop");
+                        if (result[1] == 0x00) {
+                            sendMsgUtil.setAnswerState(1);
+                            btn_main_huiliu.setText("启动回流泵");
+                            Log.i("TGA", "停止回流泵命令发送成功");
+                        } else if (result[1] == 0x01){
+                            sendMsgUtil.setAnswerState(2);
+                            Log.i("TGA", "停止回流泵命令发送失败");
+                            showToast("停止回流泵令发送失败");
+                        }
                     }
+//                    if (result[1] == 0x00) {
+//                        if (btn_main_huiliu.getText().toString().equals("启动回流泵")) {
+//                            btn_main_huiliu.setText("停止回流泵");
+////                            showToast("启动回流泵命令发送成功");
+//                            Log.i("TGA", "启动回流泵命令发送成功");
+//                        } else if (btn_main_huiliu.getText().toString().equals("停止回流泵")) {
+//                            btn_main_huiliu.setText("启动回流泵");
+////                            showToast("停止回流泵命令发送成功");
+//                            Log.i("TGA", "停止回流泵命令发送成功");
+//                        }
+//                    }else if (result[1] == 0x01){
+//                        showDialogFirst("命令发送失败");
+//                    }
                 }
-                //待机命令通用应答
-                if (result[0] == FarmConstant.CMD_WAIT){
-                    if (result[1] == 0x00){
-//                        Toast.makeText(MainActivity.this,"命令发送成功",Toast.LENGTH_SHORT).show();
-                        Log.i("TGA", "待机命令发送成功");
-                        btn_main_wait.setText("待机中");
-                    }else{
-                        showDialogFirst("待机失败");
-                    }
-                }
+
                 //故障通知
                 if (result[0] == 0x04){
                     if (result[1] == 0x00){
@@ -317,7 +498,7 @@ public class MainActivity extends AppCompatActivity {
                         }
                         btn_main_wait.setText("待机中");
                         btn_main_start.setEnabled(false);
-                        initButton(false, true);
+                        initButton(false);
                         txt_main_guzhang.setText("未发生过流");
                     }else {
                         showToast("发生了过流");
@@ -359,6 +540,8 @@ public class MainActivity extends AppCompatActivity {
                 String HWVersion = intent.getStringExtra("HWVersion");//硬件版本号
                 String SWVersion = intent.getStringExtra("SWVersion");//软件版本号*/
                 setVersion(HWVersion,SWVersion);
+                SendMsgUtil sendMsgUtil = maps.get("version");
+                sendMsgUtil.setAnswerState(1);
 
             }else if (action.equals(FarmConstant.JY_RESPONSE_ACTION_NAME)){     //建压完成结果上报
                 String[] responseData = intent.getStringArrayExtra("responseData");
@@ -402,7 +585,7 @@ public class MainActivity extends AppCompatActivity {
                 if (responseData[0].equals("建压完成")) {
                     Toast.makeText(this, "建压完成", Toast.LENGTH_SHORT).show();
                     btn_main_start.setText("建压完成");
-                    initButton(true, false);
+                    initButton(true);
 
                     //建压完成之后，建压按钮不可操作
                     btn_main_start.setEnabled(false);
@@ -419,7 +602,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     btn_main_wait.setText("待机中");
                     btn_main_start.setEnabled(false);
-                    initButton(false, false);
+                    initButton(false);
                     txt_main_guzhang.setText("未发生过流");
                 }else if (responseData[0].equals("发生了过流")){
                     showToast("发生了过流");
@@ -493,56 +676,121 @@ public class MainActivity extends AppCompatActivity {
             progressDialog = new ProgressDialog(MainActivity.this);
 
 
-            //开始建压
-            btn_main_start.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
-
-                    byte cmdStart = FarmConstant.CMD_START;//  获取开始建压命令
-                    //先判断蓝牙是否已连接
-                    if (!BlueToothHelper.mConnected) {
-                        showDialogFirst("请先连接蓝牙设备");
-                        return;
-                    }
-
-                    byte[] param = {};
-                    byte[] data = ProtocolUtil.packData(cmdStart, param);
-
-                    try {
-                        BlueToothHelper.sendData(data);
-                    } catch (BleNoConnectedException e) {
-                        e.printStackTrace();
-                    }
-
-                }
-            });
-
+            //待机按钮
             btn_main_wait.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
 
-                    byte cmdWait = FarmConstant.CMD_WAIT;//  获取待机命令
                     //先判断蓝牙是否已连接
                     if (!BlueToothHelper.mConnected) {
                         showDialogFirst("请先连接蓝牙设备");
                         return;
                     }
 
-                    byte[] param = {};
-                    byte[] data = ProtocolUtil.packData(cmdWait, param);
-
-                    try {
-                        BlueToothHelper.sendData(data);
-                        Toast.makeText(MainActivity.this, "命令发送中...", Toast.LENGTH_SHORT).show();
-
-                    } catch (BleNoConnectedException e) {
-                        e.printStackTrace();
+                    SendMsgUtil sendMsgUtil = maps.get("wait");
+                    if(!sendMsgUtil.isClick()){
+                        //设置按钮点击了
+                        sendMsgUtil.setClick(true);
+                        sendMsgUtil.setAnswerState(0);
+                        startThreeTimer(sendMsgUtil);
                     }
-
+//                    byte cmdWait = FarmConstant.CMD_WAIT;//  获取待机命令
+//                    byte[] param = {};
+//                    byte[] data = ProtocolUtil.packData(cmdWait, param);
+//
+//                    try {
+//                        BlueToothHelper.sendData(data);
+//                        Toast.makeText(MainActivity.this, "命令发送中...", Toast.LENGTH_SHORT).show();
+//
+//                    } catch (BleNoConnectedException e) {
+//                        e.printStackTrace();
+//                    }
 
                 }
             });
 
+            //开始建压按钮
+            btn_main_start.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+
+
+                    //先判断蓝牙是否已连接
+                    if (!BlueToothHelper.mConnected) {
+                        showDialogFirst("请先连接蓝牙设备");
+                        return;
+                    }
+
+                    SendMsgUtil sendMsgUtil = maps.get("start");
+                    if(!sendMsgUtil.isClick()){
+                        //设置按钮点击了
+                        sendMsgUtil.setClick(true);
+                        sendMsgUtil.setAnswerState(0);
+                        startThreeTimer(sendMsgUtil);
+                    }
+//                    byte cmdStart = FarmConstant.CMD_START;//  获取开始建压命令
+//                    byte[] param = {};
+//                    byte[] data = ProtocolUtil.packData(cmdStart, param);
+//
+//                    try {
+//                        BlueToothHelper.sendData(data);
+//                    } catch (BleNoConnectedException e) {
+//                        e.printStackTrace();
+//                    }
+
+                }
+            });
+
+
+            btn_main_jiare.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View view) {
+
+                    if (BlueToothHelper.mConnected) {
+//                        byte cmdJiaRe = FarmConstant.CMD_JIARE;
+                        if (btn_main_jiare.getText().toString().equals("开始加热")) {
+                            SendMsgUtil sendMsgUtil = maps.get("jiareStart");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
+                            }
+//                            byte[] param = {FarmConstant.SUCCESS};
+//                            byte[] data =  ProtocolUtil.packData(cmdJiaRe, param);
+//                            try {
+//                                BlueToothHelper.sendData(data);
+//                                Toast.makeText(MainActivity.this, "加热命令发送中...", Toast.LENGTH_SHORT).show();
+//                            } catch (BleNoConnectedException e) {
+//                                e.printStackTrace();
+//                            }
+                        } else if(btn_main_jiare.getText().toString().equals("停止加热")){
+                            SendMsgUtil sendMsgUtil = maps.get("jiareStop");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
+                            }
+//                            byte[] param = {FarmConstant.FAILED};
+//                            byte[] data = ProtocolUtil.packData(cmdJiaRe, param);
+//                            try {
+//                                BlueToothHelper.sendData(data);
+//                                Toast.makeText(MainActivity.this, "停止加热命令发送中...", Toast.LENGTH_SHORT).show();
+//                            } catch (BleNoConnectedException e) {
+//                                e.printStackTrace();
+//                            }
+                        }
+                    } else {
+                        showDialogFirst("请先连接蓝牙设备");
+                        return;
+                    }
+
+                }
+            });
+
+
+            //喷射按钮
             btn_main_penshe.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
@@ -553,123 +801,133 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         if (btn_main_penshe.getText().toString().equals("启动喷射")) {
 
-                            byte cmdPenshe = FarmConstant.CMD_PENSHE;   //获取喷射控制命令
-
-                            byte[] param = {FarmConstant.SUCCESS};
-                            byte[] data =  ProtocolUtil.packData(cmdPenshe, param);
-
-                            try {
-                                BlueToothHelper.sendData(data);
-                                Toast.makeText(MainActivity.this, "喷射命令发送中...", Toast.LENGTH_SHORT).show();
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
+                            SendMsgUtil sendMsgUtil = maps.get("pensheStart");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
                             }
+//                            byte cmdPenshe = FarmConstant.CMD_PENSHE;   //获取喷射控制命令
+//
+//                            byte[] param = {FarmConstant.SUCCESS};
+//                            byte[] data =  ProtocolUtil.packData(cmdPenshe, param);
+//
+//                            try {
+//                                BlueToothHelper.sendData(data);
+//                                Toast.makeText(MainActivity.this, "喷射命令发送中...", Toast.LENGTH_SHORT).show();
+//                            } catch (BleNoConnectedException e) {
+//                                e.printStackTrace();
+//                            }
 
                         } else if (btn_main_penshe.getText().toString().equals("停止喷射")) {
 
-                            byte cmdPenshe = FarmConstant.CMD_PENSHE;   //获取喷射控制命令
-
-                            byte[] param = {FarmConstant.FAILED};
-                            byte[] data =ProtocolUtil.packData(cmdPenshe, param);
-
-                            try {
-                                BlueToothHelper.sendData(data);
-                                Toast.makeText(MainActivity.this, "喷射命令发送中...", Toast.LENGTH_SHORT).show();
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
+                            SendMsgUtil sendMsgUtil = maps.get("pensheStop");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
                             }
+//                            byte cmdPenshe = FarmConstant.CMD_PENSHE;   //获取喷射控制命令
+//
+//                            byte[] param = {FarmConstant.FAILED};
+//                            byte[] data =ProtocolUtil.packData(cmdPenshe, param);
+//
+//                            try {
+//                                BlueToothHelper.sendData(data);
+//                                Toast.makeText(MainActivity.this, "喷射命令发送中...", Toast.LENGTH_SHORT).show();
+//                            } catch (BleNoConnectedException e) {
+//                                e.printStackTrace();
+//                            }
                         }
                     }
 
                 }
             });
 
-            //排空控制
+            //排空按钮控制
             btn_main_paikong.setOnClickListener(new View.OnClickListener() {
 
                 @Override
                 public void onClick(View view) {
 
                     if (BlueToothHelper.mConnected) {
-                        //获取排空控制命令
-                        final byte cmdPaikong = FarmConstant.CMD_PAIKONG;
 
-                            byte[] param = {FarmConstant.SUCCESS};
-                            byte[] data = ProtocolUtil.packData(cmdPaikong, param);
+                        if (btn_main_paikong.getText().toString().equals("开始排空")) {
 
-                            try {
-                                BlueToothHelper.sendData(data);
-                                Toast.makeText(MainActivity.this, "排空命令发送中...", Toast.LENGTH_SHORT).show();
-//                                BlueToothHelper.test();
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
+                            SendMsgUtil sendMsgUtil = maps.get("paikongStart");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
                             }
-                    } else {
-                        showDialogFirst("请先连接蓝牙设备");
-                        return;
-                    }
-                }
-            });
 
-            btn_main_jiare.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View view) {
+                        } else if (btn_main_paikong.getText().toString().equals("停止排空")) {
 
-                    if (BlueToothHelper.mConnected) {
-                        byte cmdJiaRe = FarmConstant.CMD_JIARE;
-                        if (btn_main_jiare.getText().toString().equals("开始加热")) {
-                            byte[] param = {FarmConstant.SUCCESS};
-                            byte[] data =  ProtocolUtil.packData(cmdJiaRe, param);
-                            try {
-                                BlueToothHelper.sendData(data);
-                                Toast.makeText(MainActivity.this, "加热命令发送中...", Toast.LENGTH_SHORT).show();
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
-                            }
-                        } else if(btn_main_jiare.getText().toString().equals("停止加热")){
-                            byte[] param = {FarmConstant.FAILED};
-                            byte[] data = ProtocolUtil.packData(cmdJiaRe, param);
-                            try {
-                                BlueToothHelper.sendData(data);
-                                Toast.makeText(MainActivity.this, "停止加热命令发送中...", Toast.LENGTH_SHORT).show();
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
+                            SendMsgUtil sendMsgUtil = maps.get("paikongStop");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
                             }
                         }
                     } else {
                         showDialogFirst("请先连接蓝牙设备");
                         return;
                     }
-
                 }
             });
 
+
+            //方向阀按钮监听
             btn_main_fanxiang.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
-
                     if (BlueToothHelper.mConnected) {
-                        byte cmdFanXiang = FarmConstant.CMD_FANFIANG;
-                        if (btn_main_fanxiang.getText().toString().equals("启动反向阀")) {
-                            byte[] param = {FarmConstant.SUCCESS};
-                            byte[] data = ProtocolUtil.packData(cmdFanXiang, param);
-                            try {
-                                BlueToothHelper.sendData(data);
-                                Toast.makeText(MainActivity.this, "启动控制命令发送中...", Toast.LENGTH_SHORT).show();
+                        if (btn_main_fanxiang.getText().toString().equals("启动方向阀")) {
 
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
+                            SendMsgUtil sendMsgUtil = maps.get("fangxiangStart");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
                             }
-                        } else if(btn_main_fanxiang.getText().toString().equals("停止反向阀")){
-                            byte[] param = {FarmConstant.FAILED};
-                            byte[] data = ProtocolUtil.packData(cmdFanXiang, param);
-                            try {
-                                BlueToothHelper.sendData(data);
-                                Toast.makeText(MainActivity.this, "停止控制命令发送中...", Toast.LENGTH_SHORT).show();
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
+
+                        } else if (btn_main_fanxiang.getText().toString().equals("停止方向阀")) {
+
+                            SendMsgUtil sendMsgUtil = maps.get("fangxiangStop");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
                             }
                         }
+//                        byte cmdFanXiang = FarmConstant.CMD_FANFIANG;
+//                        if (btn_main_fanxiang.getText().toString().equals("启动反向阀")) {
+//                            byte[] param = {FarmConstant.SUCCESS};
+//                            byte[] data = ProtocolUtil.packData(cmdFanXiang, param);
+//                            try {
+//                                BlueToothHelper.sendData(data);
+//                                Toast.makeText(MainActivity.this, "启动控制命令发送中...", Toast.LENGTH_SHORT).show();
+//
+//                            } catch (BleNoConnectedException e) {
+//                                e.printStackTrace();
+//                            }
+//                        } else if(btn_main_fanxiang.getText().toString().equals("停止反向阀")){
+//                            byte[] param = {FarmConstant.FAILED};
+//                            byte[] data = ProtocolUtil.packData(cmdFanXiang, param);
+//                            try {
+//                                BlueToothHelper.sendData(data);
+//                                Toast.makeText(MainActivity.this, "停止控制命令发送中...", Toast.LENGTH_SHORT).show();
+//                            } catch (BleNoConnectedException e) {
+//                                e.printStackTrace();
+//                            }
+//                        }
                     } else {
                         showDialogFirst("请先连接蓝牙设备");
                         return;
@@ -679,36 +937,57 @@ public class MainActivity extends AppCompatActivity {
             });
 
 
+            //回流泵按钮监听
             btn_main_huiliu.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
 
                     if (BlueToothHelper.mConnected) {
-                        byte cmdHuiLiu = FarmConstant.CMD_HUILIU;
-
                         if (btn_main_huiliu.getText().toString().equals("启动回流泵")) {
 
-                            byte[] param = {FarmConstant.SUCCESS};
-                            byte[] data = ProtocolUtil.packData(cmdHuiLiu, param);
-
-                            try {
-                                BlueToothHelper.sendData(data);
-                                Toast.makeText(MainActivity.this, "启动控制命令发送中...", Toast.LENGTH_SHORT).show();
-
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
+                            SendMsgUtil sendMsgUtil = maps.get("huiliuStart");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
                             }
 
-                        } else if(btn_main_huiliu.getText().toString().equals("停止回流泵")){
-                            byte[] param = {FarmConstant.FAILED};
-                            byte[] data = ProtocolUtil.packData(cmdHuiLiu, param);
-                            try {
-                                BlueToothHelper.sendData(data);
-                                Toast.makeText(MainActivity.this, "停止控制命令发送中...", Toast.LENGTH_SHORT).show();
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
+                        } else if (btn_main_huiliu.getText().toString().equals("停止回流泵")) {
+
+                            SendMsgUtil sendMsgUtil = maps.get("huiliuStop");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
                             }
                         }
+//                        byte cmdHuiLiu = FarmConstant.CMD_HUILIU;
+//
+//                        if (btn_main_huiliu.getText().toString().equals("启动回流泵")) {
+//
+//                            byte[] param = {FarmConstant.SUCCESS};
+//                            byte[] data = ProtocolUtil.packData(cmdHuiLiu, param);
+//
+//                            try {
+//                                BlueToothHelper.sendData(data);
+//                                Toast.makeText(MainActivity.this, "启动控制命令发送中...", Toast.LENGTH_SHORT).show();
+//
+//                            } catch (BleNoConnectedException e) {
+//                                e.printStackTrace();
+//                            }
+//
+//                        } else if(btn_main_huiliu.getText().toString().equals("停止回流泵")){
+//                            byte[] param = {FarmConstant.FAILED};
+//                            byte[] data = ProtocolUtil.packData(cmdHuiLiu, param);
+//                            try {
+//                                BlueToothHelper.sendData(data);
+//                                Toast.makeText(MainActivity.this, "停止控制命令发送中...", Toast.LENGTH_SHORT).show();
+//                            } catch (BleNoConnectedException e) {
+//                                e.printStackTrace();
+//                            }
+//                        }
                     } else {
                         showDialogFirst("请先连接蓝牙设备");
                         return;
@@ -755,13 +1034,13 @@ public class MainActivity extends AppCompatActivity {
 
         }
 
-
+        private boolean exit = false;
         @Override
         protected void onDestroy () {
 
             //当用户退出测试界面的时候，需要再次建立握手
             FarmConstant.HAND_ANSWER_STATE = 0;
-
+            exit = true;
             //先判断蓝牙是否已连接
             if (BlueToothHelper.mConnected) {
                 byte cmdStart = FarmConstant.CMD_BACK;//  获取返回主界面的命令字
@@ -782,30 +1061,12 @@ public class MainActivity extends AppCompatActivity {
             super.onDestroy();
         }
 
-        private void initButton (boolean x, boolean none){
-            if(none){
-                btn_main_wait.setEnabled(false);
-                btn_main_wait.setTextColor(Color.GRAY);
-                btn_main_start.setEnabled(false);
-                btn_main_start.setTextColor(Color.GRAY);
-                btn_main_penshe.setEnabled(x);
-                btn_main_penshe.setTextColor(Color.GRAY);
-                btn_main_jiare.setEnabled(x);
-                btn_main_jiare.setTextColor(Color.GRAY);
-                btn_main_paikong.setEnabled(x);
-                btn_main_paikong.setTextColor(Color.GRAY);
-                btn_main_huiliu.setEnabled(x);
-                btn_main_huiliu.setTextColor(Color.GRAY);
-                btn_main_fanxiang.setEnabled(x);
-                btn_main_fanxiang.setTextColor(Color.GRAY);
-
-                return;
-            }
-
+        private void initButton (boolean x){
            if(x == false){
-               btn_main_wait.setEnabled(true);
-               btn_main_wait.setTextColor(Color.BLACK);
+//               btn_main_wait.setEnabled(true);
+//               btn_main_wait.setTextColor(Color.BLACK);
                btn_main_start.setEnabled(true);
+               btn_main_start.setText("开始建压");
                btn_main_start.setTextColor(Color.rgb(21,145,233));
                btn_main_penshe.setEnabled(x);
                btn_main_penshe.setTextColor(Color.GRAY);
@@ -858,7 +1119,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         protected void showToast (String msg){
-            Toast.makeText(MainActivity.this, msg, Toast.LENGTH_LONG).show();
+            Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show();
         }
 
 
@@ -928,35 +1189,45 @@ public class MainActivity extends AppCompatActivity {
                             mtimer.setVisibility(View.VISIBLE);
                             String str = String.valueOf(recLen);
                             mtimer.setText(str);
-                        }else if(recLen < 0){
-                            txt_main_time.setVisibility(View.INVISIBLE);
-                            mtimer.setVisibility(View.INVISIBLE);
-                            Log.e(TAG,"reclen"+recLen);
-                            byte cmdPaikong = FarmConstant.CMD_JIARE;
-                            byte[] param = {FarmConstant.FAILED};
-                            byte[] data = ProtocolUtil.packData(cmdPaikong, param);
-                            try {
-                                BlueToothHelper.sendData(data);
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
-                            }
-
                         }
                         break;
+                    case -99: //停止排空
+                        txt_main_time.setVisibility(View.INVISIBLE);
+                        mtimer.setVisibility(View.INVISIBLE);
+                        //自动停止排空
+                        SendMsgUtil sendMsgUtil = maps.get("paikongStop");
+                        if(!sendMsgUtil.isClick()){
+                            //设置按钮点击了
+                            sendMsgUtil.setClick(true);
+                            sendMsgUtil.setAnswerState(0);
+                            startThreeTimer(sendMsgUtil);
+                        }
+                        break;
+                    case -999: //获取版本号
+                        showDialogFirst(version1,version2);
+                        break;
                 }
+
+
                 super.handleMessage(msg);
             }
         };
 
-        //设置计时器
+        //设置排空计时器
        private void setMtimer() {
             final Timer timer1 = new Timer();
+            final SendMsgUtil sendMsgUtil = maps.get("paikongStop");
             TimerTask task = new TimerTask() {
                int recLen = 30;
                @Override
                public void run() {
-                   if(recLen < 0){
+                   if(recLen < 0 || sendMsgUtil.getAnswerState() == 1){
                        timer1.cancel();
+                       sendMsgUtil.setAnswerState(0);
+                       Message message = new Message();
+                       message.what = -99;
+                       mhandler.sendMessage(message);
+                       return;
                    }
                    Message message = new Message();
                    message.arg1 = recLen;
@@ -968,33 +1239,45 @@ public class MainActivity extends AppCompatActivity {
            timer1.schedule(task,0,1000);
        }
 
-    //启动握手定时任务 发送三次
-    private void startHandTimer() {
-        final Timer timer1 = new Timer();
+    //启动定时任务 发送三次
+    private void startThreeTimer(final SendMsgUtil sendMsgUtil) {
+        final Timer threeTimer = new Timer();
         TimerTask task = new TimerTask() {
             int count = 1;
             @Override
             public void run() {
-                if(count == 3 && !FarmConstant.ANSWER){
-                    timer1.cancel();
-                    finish();
-                }
-                if(FarmConstant.ANSWER){
-                    timer1.cancel();
+                System.out.println(sendMsgUtil.toString());
+                if(exit){
+                    System.out.println("用户退出");
+                    threeTimer.cancel();
+                    return;
                 }
 
-                //发送握手命令  - 安仲辉
-                byte cmdHandShake = CMD_HANDSHAKE;
-                SimpleDateFormat sdf =   new SimpleDateFormat("yyyyMMddHHmmss");
-                String timeStr = sdf.format(Calendar.getInstance().getTime());
-                byte[] timeByte = ProtocolUtil.HexString2Buf(timeStr);
-                //System.out.println(ProtocolUtil.bytes2HexString(ProtocolUtil.HexString2Buf(timeStr)));
+                //判断是否是获取版本号
+                if(isGetVersion && sendMsgUtil.getAnswerState() == 1){
+                    Message msg = new Message();
+                    msg.what = -999;
+                    mhandler.sendMessage(msg);
+                    isGetVersion = false;
+                    System.out.println("获取版本号");
+                    return;
+                }
 
-                //拼接数据，时间后追加泵的编号 - 安仲辉
-                byte[] paramHandShake = ProtocolUtil.append(ProtocolUtil.HexString2Buf(timeStr), (byte)FarmConstant.TYPE);
-                byte[] dataHandShake = new ProtocolUtil().packData(cmdHandShake, paramHandShake);
+                if(count == 3 && sendMsgUtil.getAnswerState() == 0){  //发送三次无应答
+                    threeTimer.cancel();
+                    sendMsgUtil.setClick(false);
+                }else if(sendMsgUtil.getAnswerState() == 1){  //应答成功
+                    threeTimer.cancel();
+                    sendMsgUtil.setClick(false);
+                    return;
+                }else if(sendMsgUtil.getAnswerState() == 2){  //应答失败
+                    threeTimer.cancel();
+                    sendMsgUtil.setClick(false);
+                    return;
+                }
+
                 try {
-                    BlueToothHelper.sendData(dataHandShake);
+                    BlueToothHelper.sendData(sendMsgUtil.getSendBytes());
                 } catch (BleNoConnectedException e) {
                     e.printStackTrace();
                 }
@@ -1002,10 +1285,11 @@ public class MainActivity extends AppCompatActivity {
                 count++;
             }
         };
-        timer1.schedule(task,0,1000);
+        threeTimer.schedule(task,0,1000);
     }
 
 
+    private boolean isGetVersion = false;
        //设置下拉菜单
         private void setPopupMenu(final String version1, final String version2){
             popupMenu = new PopupMenu(this,findViewById(R.id.img_setting));
@@ -1101,16 +1385,25 @@ public class MainActivity extends AppCompatActivity {
                                 showDialogFirst("请先连接蓝牙设备");
                                 return false;
                             }
-                            byte cmdVersion = CMD_VERSION;   //获取版本号命令
 
-                            byte[] param = {};
-                            byte[] data = ProtocolUtil.packData(cmdVersion, param);
-                            try {
-                                BlueToothHelper.sendData(data);
-                            } catch (BleNoConnectedException e) {
-                                e.printStackTrace();
+                            SendMsgUtil sendMsgUtil = maps.get("version");
+                            if(!sendMsgUtil.isClick()){
+                                //设置按钮点击了
+                                isGetVersion = true;
+                                sendMsgUtil.setClick(true);
+                                sendMsgUtil.setAnswerState(0);
+                                startThreeTimer(sendMsgUtil);
                             }
-                            showDialogFirst(version1,version2);
+//                            byte cmdVersion = CMD_VERSION;   //获取版本号命令
+//
+//                            byte[] param = {};
+//                            byte[] data = ProtocolUtil.packData(cmdVersion, param);
+//                            try {
+//                                BlueToothHelper.sendData(data);
+//                            } catch (BleNoConnectedException e) {
+//                                e.printStackTrace();
+//                            }
+//                            showDialogFirst(version1,version2);
                             break;
                     }
                     return false;
